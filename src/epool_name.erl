@@ -12,7 +12,7 @@
 -export([
 	start_link/0,
 	add_pool/4,
-	remove_pool/1,
+	stop_pool/1,
 	
 	gc_pool_list/0		 
 ]).
@@ -33,12 +33,12 @@ start_link()->
 	gen_server:start_link({local,?MODULE}, ?MODULE, [], []). 
 
 %% 添加一个pool，如果存在老的同名pool(默认同名即同服务)，会延迟关闭
-add_pool(Pool_name,PoolSize,ChildMFA,ChildMods)->
-	gen_server:call(?MODULE,{add_pool,Pool_name,PoolSize,ChildMFA,ChildMods}).
+add_pool(Pool_name,PoolSize,MFAs,ChildMods)->
+	gen_server:call(?MODULE,{add_pool,Pool_name,PoolSize,MFAs,ChildMods}).
 
 %% 删除Pool
-remove_pool(Pool_name)->
-	gen_server:cast(?MODULE,{remove_pool,Pool_name}).
+stop_pool(Pool_name)->
+	gen_server:cast(?MODULE,{stop_pool,Pool_name}).
 
 %% gc列表
 gc_pool_list()->
@@ -84,7 +84,7 @@ init([]) ->
 handle_call(gc_pool_list, _From, #state{gc_pool_list = Gc_pool_list} = State) ->
 	Reply = [P || {P,_T} <-Gc_pool_list],
 	{reply, Reply, State};
-handle_call({add_pool,PoolName,PoolSize,ChildMFA,ChildMods}, _From, #state{last_time = Last_time,seq = Seq,gc_pool_list = Gc_pool_list} = State) ->
+handle_call({add_pool,PoolName,PoolSize,MFAs,ChildMods}, _From, #state{last_time = Last_time,seq = Seq,gc_pool_list = Gc_pool_list} = State) ->
 	Now = get_timestamp(),
 	New_Gc_pool_list = case ets:lookup(epool_name, PoolName) of
 		[{PoolName, TempPoolName}] ->
@@ -100,7 +100,7 @@ handle_call({add_pool,PoolName,PoolSize,ChildMFA,ChildMods}, _From, #state{last_
 	end,
 	
 	New_TempPoolName = list_to_atom(lists:concat([PoolName,"_",Now,"_",New_Seq])),
-	Ret = epool_sup:add_pool(PoolName, PoolSize,ChildMFA,ChildMods),
+	Ret = epool_sup:add_pool(New_TempPoolName, PoolSize,MFAs,ChildMods),
 	New_State = case Ret of
 		{error,_}->
 			State;
@@ -130,11 +130,11 @@ handle_call(_Request, _From, State) ->
 	NewState :: term(),
 	Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
-handle_cast({remove_pool,PoolName},#state{gc_pool_list = Gc_pool_list} = State) ->
+handle_cast({stop_pool,PoolName},#state{gc_pool_list = Gc_pool_list} = State) ->
 	Now = get_timestamp(),
 	New_Gc_pool_list = case ets:lookup(epool_name, PoolName) of
 		[{PoolName, TempPoolName}] ->
-			ets:insert(epool_name, {PoolName, TempPoolName}),
+			ets:delete(epool_name, PoolName),
 			[{TempPoolName,Now}] ++ Gc_pool_list;
 		_ ->
 			Gc_pool_list
@@ -162,7 +162,7 @@ handle_info({timeout, _TRef, gc}, #state{tref = OldTRef,gc_pool_list = Gc_pool_l
 	New_Gc_pool_list = lists:foldl(fun({TempPoolName,Time} = E,Temp)-> 
 		if
 			Now-Time>?INTERVAL-> %% 超出间隔，回收
-				epool_sup:remove_pool(TempPoolName),
+				epool_sup:stop_pool(TempPoolName),
 				Temp;
 			true->
 				[E] ++ Temp

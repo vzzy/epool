@@ -11,7 +11,8 @@
 -export([
 	start_link/4,
 	start_worker/3,
-	get_worker/1	
+	get_worker/1,
+	get_pool_size/1	
 ]).
 
 %% Supervisor callbacks
@@ -24,10 +25,10 @@
 %%====================================================================
 
 -spec start_link(atom(), integer(), integer(), [atom()], {atom(), atom(), [term()]}) -> {ok, pid()} | ignore | {error, term()}.
-start_link(PoolName, PoolSize,ChildMFA,ChildMods) ->
-	start_link(PoolName, PoolSize,10*PoolSize,ChildMFA,ChildMods).
-start_link(PoolName, PoolSize,MaxRestarts,ChildMFA,ChildMods) ->
-    Args = [PoolName, PoolSize, MaxRestarts,ChildMFA,ChildMods],
+start_link(PoolName, PoolSize,MFAs,ChildMods) ->
+	start_link(PoolName, PoolSize,10*PoolSize,MFAs,ChildMods).
+start_link(PoolName, PoolSize,MaxRestarts,MFAs,ChildMods) ->
+    Args = [PoolName, PoolSize, MaxRestarts,MFAs,ChildMods],
 	SupName = list_to_atom(lists:concat([?MODULE,"_",PoolName])),
 	supervisor:start_link({local, SupName}, ?MODULE, Args).
 
@@ -38,20 +39,27 @@ get_worker(PoolName) ->
     [{N, Worker}] = ets:lookup(PoolName, N),
     Worker.
 
+get_pool_size(PoolName) ->
+    [{pool_size, PoolSize}] = ets:lookup(PoolName, pool_size),
+    PoolSize.
+
 %%====================================================================
 %% Supervisor callbacks
 %%====================================================================
 
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
-init([PoolName, PoolSize, MaxRestarts,ChildMFA,ChildMods]) ->
+init([PoolName, PoolSize, MaxRestarts,MFAs,ChildMods]) ->
 	PoolTable = ets:new(PoolName, [named_table, public]),
-	ets:insert(PoolTable, {pool_size, PoolSize}),
+	Len = length(MFAs),
+	ets:insert(PoolTable, {pool_size, PoolSize*Len}),
 	ets:insert(PoolTable, {seq, 0}),
-    MFA = fun(Id) ->
-    	{?MODULE, start_worker, [Id, PoolTable, ChildMFA]}
-    end,
-    ChildSpec = [{N, MFA(N), transient, 2000, worker, ChildMods} || N <- lists:seq(1, PoolSize)],
-    {ok, {{one_for_one, MaxRestarts, PoolSize}, ChildSpec}}.
+	{ChildSpec,_} = lists:foldl(fun(MFA,{Temp_ChildSpec,Temp_no})-> 
+		Fun = fun(Id) ->
+	    	{?MODULE, start_worker, [Id, PoolTable, MFA]}
+	    end,								
+		{[{N, Fun(N), transient, 2000, worker, ChildMods} || N <- lists:seq((Temp_no-1)*PoolSize+1, Temp_no*PoolSize)] ++ Temp_ChildSpec,Temp_no+1}				
+	end,{[],1},MFAs),
+    {ok, {{one_for_one, MaxRestarts, PoolSize*Len}, ChildSpec}}.
 
 %%====================================================================
 %% Internal functions

@@ -12,7 +12,7 @@
 	start_link/0,
 		
 	add_pool/4,
-	remove_pool/1
+	stop_pool/1
 ]).
 
 %% Supervisor callbacks
@@ -42,10 +42,10 @@ init([]) ->
 %%====================================================================
 
 %% 添加一个pool
-add_pool(Pool_name, PoolSize,ChildMFA,ChildMods)->
+add_pool(Pool_name, PoolSize,MFAs,ChildMods)->
 	supervisor:start_child(?SERVER,{
 		Pool_name,
-		{epool_worker_sup, start_link,[Pool_name, PoolSize,ChildMFA,ChildMods]},
+		{epool_worker_sup, start_link,[Pool_name, PoolSize,MFAs,ChildMods]},
 		transient, 
 		2000, 
 		supervisor, 
@@ -53,7 +53,7 @@ add_pool(Pool_name, PoolSize,ChildMFA,ChildMods)->
 	}).
 %% 删除一个pool
 %% return ok | {error, Error}
-remove_pool(Pool_name)->
+stop_pool(Pool_name)->
 	supervisor:terminate_child(?SERVER, Pool_name),
 	supervisor:delete_child(?SERVER, Pool_name).
 
