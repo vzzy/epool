@@ -47,6 +47,7 @@ get_worker(PoolName)->
 	end.
 	
 %% 添加一个pool(约定:同项目里不允许同名池，否则覆盖)
+%% 注:请不要超级频繁添加同名池，因为是延迟关闭，会导致大量进程滞留。
 %% @PoolName atom
 %% @PoolSize int
 %% @ChildMFA {M,F,A}
@@ -55,6 +56,7 @@ get_worker(PoolName)->
 add_pool(Pool_name, PoolSize,ChildMFA,ChildMods)->
 	epool_name:add_pool(Pool_name, PoolSize,ChildMFA,ChildMods).
 %% 删除一个pool
+%% 延迟关闭，保证所有正在执行的任务能正常结束。 优雅关闭
 %% return ok 
 remove_pool(Pool_name)->
 	epool_name:remove_pool(Pool_name),
