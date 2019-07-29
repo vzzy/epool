@@ -67,7 +67,7 @@ get_worker(PoolName)->
 %% @PoolSize int 池大小 = PoolSize * len(MFAs)
 %% @ChildMFA {M,F,A}
 %% @ChildMods [atom]  module name
-%% return {ok,Pid} | {ok,Pid,Info} | {error,Reason}
+%% return {ok,Pid} | {error,Reason}
 add_pool(Pool_name, PoolSize,ChildMFA,ChildMods)->
 	epool_name:add_pool(Pool_name, PoolSize,ChildMFA,ChildMods).
 %% 删除一个pool

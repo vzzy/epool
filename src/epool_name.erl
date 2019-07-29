@@ -112,7 +112,13 @@ handle_call({add_pool,PoolName,PoolSize,MFAs,ChildMods}, _From, #state{last_time
 				gc_pool_list = New_Gc_pool_list			
 			}
 	end,
-	{reply, Ret, New_State};
+	New_Ret = case Ret of
+		{ok,Child,_}->
+			{ok,Child};
+		_->
+			Ret
+	end,
+	{reply, New_Ret, New_State};
 
 handle_call(_Request, _From, State) ->
     Reply = ok,

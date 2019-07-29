@@ -17,7 +17,7 @@ Build
 	%% @PoolSize int    池大小 = PoolSize * len(MFAs)
 	%% @MFAs [{M,F,A}]
 	%% @ChildMods [atom]  module name
-	%% return {ok,Pid} | {ok,Pid,Info} | {error,Reason}
+	%% return {ok,Pid} | {error,Reason}
 	epool:add_pool(Pool_name,PoolSize,MFAs,ChildMods).
 	
 	%% 删除一个pool
